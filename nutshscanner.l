@@ -40,8 +40,7 @@ bool subVar(char** toReturn, char* name) {
 %array
 %option noyywrap
 %x string_condition
-
-CHAR            [\}\{:$.A-Za-z0-9!\/_-][\}\{:$.A-Za-z0-9!\/_-]*
+CHAR            [\}\{?*:$.A-Za-z0-9!\/_-][\}\{?*:$.A-Za-z0-9!\/_-]*
 ANYCHAR            [)(\}\{*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(\}\{*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -]*
 
 %%
@@ -51,20 +50,23 @@ ANYCHAR            [)(\}\{*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(\}\{*&%$#@!`;,\.a-zA-
 
 [ ]		          {            }
 bye             { return BYE; }
+<<EOF>>         { exit(1); }
 cd		          { return CD; }
 alias		        { return ALIAS; }
 printenv        { return PRINTENV; }
 setenv          { return SETENV; }
-unalias         { return UNALIAS; }
+unalias         { sunalias = true; return UNALIAS; }
 &               { return AMPERSAND; }
 "|"             { return PIPE; }
 "\n"		        { return END; }
+\<2{CHAR}+      { return ERR; }
 \<              { return INREDIRECT; }
 >>|>             { yylval.string = strdup(yytext); return REDIRECT; }
+2>&1|2>         { yylval.string = strdup(yytext); return ERR; }
 [\"]            { BEGIN(string_condition); }
 {CHAR}+             {
                       char * temp;
-                      if(ifAlias(yytext)) {
+                      if(ifAlias(yytext) && !sunalias) {
                           printf("yytext: %s\n", yytext);
                           //source: https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html
                              char *yycopy = strdup( subAliases(yytext) );
@@ -78,15 +80,10 @@ unalias         { return UNALIAS; }
                           unput(temp[i]);
                         free(temp);
                       }
-                      /*else if(inPath(&temp, yytext)){
-                          yylval.string = strdup(temp);
-                          printf("yytext: %s\n", temp);
-                          free(temp);
-                          return MYFILE;
-                      }*/
                       else {
                           printf("yytext: %s\n", yytext);
                           yylval.string = strdup(yytext);
+                          sunalias = false;
                           return STRING;
                       };
                     }

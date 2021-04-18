@@ -10,8 +10,11 @@
 #include "global.h"
 #include <dirent.h>
 #include <fcntl.h>
+#include <fnmatch.h>
 #define HOME varTable.word[2]
 #define MAX_INDEX 129
+#define READ_END 0
+#define WRITE_END 1
 int yylex(void);
 int yyerror(char *s);
 int runCD(char* arg);
@@ -27,6 +30,7 @@ int runUnsetEnv(char *var);
 int runProcess(int index);
 int runPiping();
 bool inPath(int index , char* name);
+int addArg();
 %}
 
 %union {char *string;
@@ -51,13 +55,11 @@ cmd_line    :
 	| ALIAS END									{ runAlias(); return 1; }
 	| UNALIAS STRING END				{ runUnalias($2); return 1;}
 	|	amp END										{
-																printf("O: %d, I: %d, E: %d\n", redirectedOutput, redirectedInput, redirectedErr);
+																//printf("O: %d, I: %d, E: %d\n", redirectedOutput, redirectedInput, redirectedErr);
 																runPiping();
-
-
 																for(int ci = 0; ci < commandIndex; ci++) commandTable[ci].argIndex = 0;
 																commandIndex = 0;
-																background,redirectedInput,redirectedErr,redirectedOutput = false;
+																background,append,redirectedInput,redirectedErr,redirectedOutput = false;
 																strcpy(inputFile, "");
 																strcpy(outputFile, "");
 																strcpy(errFile, "");
@@ -69,24 +71,24 @@ amp					: redirectErr {}
 	| redirectErr AMPERSAND { background = true; }
 	;
 redirectErr : redirectOutput { }
-	|	redirectOutput ERR					{ redirectedErr = true; strcpy(errFile, $2); }
+	|	redirectOutput ERR					{ redirectedErr = true; strcpy(errFile, $2+2); printf("errF:%s\n", errFile);}
 	;
 
 redirectOutput : redirectInput	{}
-	| redirectInput REDIRECT STRING				{ redirectedOutput = true; strcpy(outputFile, $3); }
+	| redirectInput REDIRECT STRING				{ if(strlen($2) == 2) append = true; redirectedOutput = true; strcpy(outputFile, $3); }
 	;
 
 redirectInput : piping				{}
-	| piping INREDIRECT	STRING				{ redirectedInput = true; strcpy(inputFile, $2); }
+	| piping INREDIRECT	STRING				{ printf("Why\n");redirectedInput = true; strcpy(inputFile, $3); }
 	;
 
 piping 			:
  	process											{ commandIndex++; }
-	| piping PIPE process				{ commandIndex++; }
+	| piping PIPE process				{  }
 
 	;
 process			:	STRING						{ $$ = commandIndex; strcpy(commandTable[commandIndex].command, $1); commandTable[commandIndex].argIndex = 0; }
-	| process STRING							{	strcpy(commandTable[commandIndex].argList[commandTable[commandIndex].argIndex], $2); commandTable[commandIndex].argIndex++; }
+	| process STRING							{	addArg($2); }
 	;
 
 %%
@@ -97,9 +99,40 @@ int yyerror(char *s) {
   }
 
 int runCD(char* arg) {
-	if (arg[0] != '/') { // arg is relative path
+	bool pattern = false;
+	char newArg[128];
+	//Check for patterns
+	char * check = strchr(arg, '?');
+	if(check != NULL) pattern = true;
+	check = strchr(arg, '*');
+	if(check != NULL) pattern = true;
+
+	if(pattern)
+	{
+		DIR *dp;
+		struct dirent *ep;
+		dp = opendir(".");
+		if(dp != NULL)
+		{
+			while (ep = readdir (dp))
+      {
+
+        if(fnmatch(arg, ep->d_name, FNM_NOESCAPE ) == 0)
+          {
+            //*toReturn = (char*) malloc(strlen(token)+strlen(name)+1);
+						strcpy(newArg, ep->d_name);
+          }
+       }
+       (void) closedir (dp);
+		}
+	}
+	else
+	{
+		strcpy(newArg, arg);
+	}
+	if (newArg[0] != '/') { // newArg is relative path
 		strcat(varTable.word[0], "/");
-		strcat(varTable.word[0], arg);
+		strcat(varTable.word[0], newArg);
 
 		if(chdir(varTable.word[0]) == 0) {
 			return 1;
@@ -111,14 +144,14 @@ int runCD(char* arg) {
 			return 1;
 		}
 	}
-	else { // arg is absolute path
-		if(chdir(arg) == 0){
-			strcpy(varTable.word[0], arg);
+	else { // newArg is absolute path
+		if(chdir(newArg) == 0){
+			strcpy(varTable.word[0], newArg);
 			return 1;
 		}
 		else {
 			printf("Directory not found\n");
-                       	return 1;
+      return 1;
 		}
 	}
 }
@@ -163,7 +196,7 @@ int runRedirectAlias(char* output, char* file) {
 }
 int runUnalias(char* name) {
 	int unsetIndex = -1;
-	for(int i = 0; i < aliasIndex; i++)
+	for(int i = 0; i < aliasIndex+1; i++)
 	{
 		if(unsetIndex != -1)
 		{
@@ -176,6 +209,7 @@ int runUnalias(char* name) {
 
 		}
 	}
+	aliasIndex--;
 	return 1;
 }
 
@@ -215,7 +249,7 @@ int runRedirectPrintEnv(char* output, char* file) {
 int runSetEnv(char *var, char *word) {
 	for(int i = 0; i < varIndex; i++)
 	{
-		if(strcmp(varTable.var[i], var))
+		if(strcmp(varTable.var[i], var) == 0)
 		{
 			strcpy(varTable.word[i], word);
 			return 1;
@@ -324,47 +358,57 @@ int runPiping() {
 	{
 		if(redirectedErr)
 		{
-			int efd = open(errFile, O_WRONLY | O_CREAT, S_IRWXO);
+			int efd = open(errFile, O_WRONLY | O_CREAT, S_IRWXO | S_IRWXU);
 			if(efd == -1)
 			{
 				perror("Failed to redirect standard error, file may require elevated permission to access\n");
-				exit(0);
+				exit(1);
 			}
 			if(dup2(efd, 2) == -1)
 			{
 				perror("Failed to redirect standard error, try again\n");
-				exit(0);
+				exit(1);
 			}
 		}
+		int pfds[2];
 
+		if(commandIndex > 1)
+		{
+				if(pipe(pfds) == -1)
+				{
+					perror("Pipe creation failed");
+					_exit(1);
+				}
+		}
 		for(int i = 0; i < commandIndex; i++ )
 		{
 			if(!inPath(i, commandTable[i].command))
 			{
 				printf("%s", commandTable[i].command);
 				perror("Command name not found in path");
-				exit(0);
+				_exit(1);
 			}
 			if(i == commandIndex-1 && redirectedOutput)
 			{
-				int ofd = append ? open(outputFile, O_WRONLY | O_CREAT | O_APPEND, S_IRWXO) : open(outputFile, O_WRONLY | O_CREAT, S_IRWXO);
+				int ofd = append ? open(outputFile, O_WRONLY | O_CREAT | O_APPEND, S_IRWXO | S_IRWXU) : open(outputFile, O_WRONLY | O_CREAT, S_IRWXO | S_IRWXU);
 				if(ofd == -1)
 				{
 					perror("Failed to redirect standard output, file may require elevated permission to access\n");
-					exit(1);
+					_exit(1);
 				}
 				if(dup2(ofd, 1) == -1)
 				{
 					perror("Failed to redirect standard output\n");
-					exit(0);
+					_exit(1);
 				}
 			}
+
 			pid_t child;
 			switch(child = fork())
 			{
 				case -1:
 					perror("Fork failed\n");
-					exit(0);
+					exit(1);
 				case 0:
 				{
 					if(i == 0 && redirectedInput)
@@ -373,13 +417,35 @@ int runPiping() {
 						if( ifd == -1)
 						{
 							perror("Redirecting standard input failed, file name may be wrong\n");
-							exit(0);
+							_exit(1);
 						}
 						if(dup2(ifd, 0) == -1)
 						{
 							perror("Redirecting standard input failed on dup2\n");
-							exit(0);
+							_exit(1);
 						}
+					}
+					if(i != 0)
+					{
+						printf("OCommand: %d\n", i);
+						if(dup2(pfds[0], 0) == -1)
+						{
+							perror("Redirecting standard input to pipe");
+							_exit(1);
+						}
+						close(pfds[READ_END]);
+    				close(pfds[WRITE_END]);
+					}
+					if(i != commandIndex-1)
+					{
+						printf("Command: %d\n", i);
+						if(dup2(pfds[WRITE_END], 1) == -1)
+						{
+							perror("Redirecting standard output to pipe");
+							_exit(1);
+						}
+						close(pfds[READ_END]);
+    				close(pfds[WRITE_END]);
 					}
 					char ** argv = (char**)calloc(commandTable[i].argIndex + 1, sizeof(char*));
 					argv[0] = strdup(commandTable[i].command);
@@ -391,18 +457,28 @@ int runPiping() {
 					if(execv(argv[0], argv) == -1)
 					{
 						perror("Command failed\n");
-						exit(0);
+						_exit(1);
 					}
-					exit(0);
+					_exit(1);
 				}
 				default:
 				{
 						int commandStatus;
 						pid_t tempB;
 						do { tempB = wait(&commandStatus); } while(tempB != child);
+						//waitpid(child, &commandStatus, 0);
+						//printf("status: %d\n", commandStatus);
+						if(commandStatus == 256)
+						{
+							perror("Command failed, aborting");
+							_exit(1);
+						}
 				}
+
 			}
 		}
+		close(pfds[READ_END]);
+		close(pfds[WRITE_END]);
 	}
 	exit(0);
 }
@@ -439,5 +515,47 @@ bool inPath(int index, char* name){
 
   }
   free(temp);
+	//Full path check
+	FILE *fptr = fopen(name, "r");
+	if(fptr != NULL)
+	{
+		fclose(fptr);
+		return true;
+	}
   return false;
+}
+
+int addArg(char * name)
+{
+	bool pattern = false;
+	char * check = strchr(name, '?');
+	if(check != NULL) pattern = true;
+	check = strchr(name, '*');
+	if(check != NULL) pattern = true;
+	if(pattern)
+	{
+		DIR *dp;
+		struct dirent *ep;
+		dp = opendir(".");
+		if(dp != NULL)
+		{
+			while (ep = readdir (dp))
+      {
+
+        if(fnmatch(name, ep->d_name, FNM_NOESCAPE ) == 0)
+          {
+            //*toReturn = (char*) malloc(strlen(token)+strlen(name)+1);
+						strcpy(commandTable[commandIndex].argList[commandTable[commandIndex].argIndex],ep->d_name);
+						commandTable[commandIndex].argIndex++;
+          }
+       }
+       (void) closedir (dp);
+		}
+	}
+	else
+	{
+		strcpy(commandTable[commandIndex].argList[commandTable[commandIndex].argIndex], name);
+		commandTable[commandIndex].argIndex++;
+	}
+	return 1;
 }

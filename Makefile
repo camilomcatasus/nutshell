@@ -13,3 +13,7 @@ nutshell:
 
 clean:
 	rm nutshparser.tab.c nutshparser.tab.h lex.yy.c nutshell
+redo:
+	make clean
+	make
+	./nutshell

@@ -28,7 +28,7 @@ bool redirectedErr;
 bool errToOut;
 char errFile[128];
 char cwd[PATH_MAX];
-
+bool sunalias;
 struct evTable varTable;
 
 struct aTable aliasTable;
