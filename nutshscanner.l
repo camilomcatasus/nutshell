@@ -87,7 +87,7 @@ bye             { return BYE; }
 cd		          { sunalias = true; return CD; }
 alias		        { sunalias = true; return ALIAS; }
 printenv        { return PRINTENV; }
-setenv          { return SETENV; }
+setenv          { sunalias = true; return SETENV; }
 unalias         { sunalias = true; return UNALIAS; }
 &               { return AMPERSAND; }
 "|"             { sunalias = false; return PIPE; }
