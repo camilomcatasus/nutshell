@@ -47,8 +47,21 @@ ANYCHAR            [)(\}\{*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(\}\{*&%$#@!`;,\.a-zA-
 
 %%
 
-<string_condition>{ANYCHAR}+     { yylval.string = strdup(yytext); return STRING;}
-<string_condition>[\"]          {BEGIN(INITIAL);}
+<string_condition>{ANYCHAR}+     {
+                                    char * temp;
+                                    if(subVar(&temp, yytext))
+                                    {
+                                      for(int i = strlen(temp)-1; i>=0; i--)
+                                        unput(temp[i]);
+                                      free(temp);
+                                    }
+                                    else
+                                    {
+                                      yylval.string = strdup(yytext);
+                                      return STRING;
+                                    }
+                                  }
+<string_condition>[\"]           { BEGIN(INITIAL); }
 
 [ ]		          {            }
 bye             { return BYE; }
@@ -88,6 +101,7 @@ cd		          { sunalias = true; return CD; }
 alias		        { sunalias = true; return ALIAS; }
 printenv        { return PRINTENV; }
 setenv          { sunalias = true; return SETENV; }
+unsetenv        { return UNSETENV; }
 unalias         { sunalias = true; return UNALIAS; }
 &               { return AMPERSAND; }
 "|"             { sunalias = false; return PIPE; }
