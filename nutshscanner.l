@@ -59,10 +59,9 @@ unalias         { sunalias = true; return UNALIAS; }
 &               { return AMPERSAND; }
 "|"             { return PIPE; }
 "\n"		        { return END; }
-\<2{CHAR}+      { return ERR; }
 \<              { return INREDIRECT; }
->>|>             { yylval.string = strdup(yytext); return REDIRECT; }
-2>&1|2>         { yylval.string = strdup(yytext); return ERR; }
+>>|>            { yylval.string = strdup(yytext); return REDIRECT; }
+2>&1|2>{CHAR}+  { yylval.string = strdup(yytext); return ERR; }
 [\"]            { BEGIN(string_condition); }
 {CHAR}+             {
                       char * temp;

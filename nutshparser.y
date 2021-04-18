@@ -71,7 +71,8 @@ amp					: redirectErr {}
 	| redirectErr AMPERSAND { background = true; }
 	;
 redirectErr : redirectOutput { }
-	|	redirectOutput ERR					{ redirectedErr = true; strcpy(errFile, $2+2); printf("errF:%s\n", errFile);}
+	|	redirectOutput ERR					{ redirectedErr = true;
+																	strcpy(errFile, $2+2); printf("errF:%s\n", errFile);}
 	;
 
 redirectOutput : redirectInput	{}
@@ -358,7 +359,8 @@ int runPiping() {
 	{
 		if(redirectedErr)
 		{
-			int efd = open(errFile, O_WRONLY | O_CREAT, S_IRWXO | S_IRWXU);
+
+			int efd = strcmp(errFile, "&1") == 0 ? 1 : open(errFile, O_WRONLY | O_CREAT, S_IRWXO | S_IRWXU);
 			if(efd == -1)
 			{
 				perror("Failed to redirect standard error, file may require elevated permission to access\n");
