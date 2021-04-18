@@ -6,6 +6,8 @@
 #include <string.h>
 #include "global.h"
 #include <dirent.h>
+#include <sys/types.h>
+#include <pwd.h>
 char* subAliases(char* name){
     for (int i = 0; i < aliasIndex; i++) {
         if(strcmp(aliasTable.name[i], name) == 0) {
@@ -51,14 +53,45 @@ ANYCHAR            [)(\}\{*&%$#@!`;,\.a-zA-Z0-9'/*_=~ -][)(\}\{*&%$#@!`;,\.a-zA-
 [ ]		          {            }
 bye             { return BYE; }
 <<EOF>>         { exit(1); }
-cd		          { return CD; }
-alias		        { return ALIAS; }
+~{CHAR}*        {
+                  struct passwd * pwd;
+                  char * slash = strchr(yytext, '/');
+                  if((slash != NULL || strlen(yytext) != 1))
+                  {
+                    char* yycopy = strndup(yytext+1, slash-yytext);
+                    //printf("Works: %s\n", yycopy);
+                    pwd = getpwnam(yycopy);
+                    ///printf("Works\n");
+                    if(pwd != NULL)
+                    {
+                      for(int i = strlen(pwd->pw_dir)-1; i>=0; i--)
+                      {
+                        unput(pwd->pw_dir[i]);
+                      }
+                    }
+                    else
+                      perror("No user found");
+                    free(yycopy);
+                  }
+                  else
+                  {
+                    char *yycopy = strdup(varTable.word[1]);
+                    for(int i = strlen(yycopy)-1; i>=0; i--)
+                    {
+                      unput(yycopy[i]);
+                    }
+                    free(yycopy);
+                  }
+                }
+
+cd		          { sunalias = true; return CD; }
+alias		        { sunalias = true; return ALIAS; }
 printenv        { return PRINTENV; }
 setenv          { return SETENV; }
 unalias         { sunalias = true; return UNALIAS; }
 &               { return AMPERSAND; }
-"|"             { return PIPE; }
-"\n"		        { return END; }
+"|"             { sunalias = false; return PIPE; }
+"\n"		        { sunalias = false; return END; }
 \<              { return INREDIRECT; }
 >>|>            { yylval.string = strdup(yytext); return REDIRECT; }
 2>&1|2>{CHAR}+  { yylval.string = strdup(yytext); return ERR; }
@@ -72,6 +105,7 @@ unalias         { sunalias = true; return UNALIAS; }
                              for ( int i = strlen(subAliases(yytext)) - 1; i >= 0; --i )
                                  unput( yycopy[i] );
                              free( yycopy );
+
                       }
                       else if(subVar(&temp, yytext))
                       {
@@ -82,8 +116,8 @@ unalias         { sunalias = true; return UNALIAS; }
                       else {
                           printf("yytext: %s\n", yytext);
                           yylval.string = strdup(yytext);
-                          sunalias = false;
                           return STRING;
+                          sunalias = true;
                       };
                     }
 %%

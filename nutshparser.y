@@ -80,7 +80,7 @@ redirectOutput : redirectInput	{}
 	;
 
 redirectInput : piping				{}
-	| piping INREDIRECT	STRING				{ printf("Why\n");redirectedInput = true; strcpy(inputFile, $3); }
+	| piping INREDIRECT	STRING				{ redirectedInput = true; strcpy(inputFile, $3); }
 	;
 
 piping 			:
@@ -158,24 +158,41 @@ int runCD(char* arg) {
 }
 
 int runSetAlias(char *name, char *word) {
+	int index = aliasIndex;
 	if(strcmp(name, word) == 0){
 		printf("Error, expansion of \"%s\" would create a loop.\n", name);
 		return 1;
 	}
+	char * currentWord = strdup(word);
 	for (int i = 0; i < aliasIndex; i++) {
-		if((strcmp(aliasTable.name[i], name) == 0) && (strcmp(aliasTable.word[i], word) == 0)){
+
+		if((strcmp(aliasTable.name[i], name) == 0) && (strcmp(aliasTable.word[i], word) == 0))
+		{
 			printf("Error, expansion of \"%s\" would create a loop.\n", name);
+			free(currentWord);
 			return 1;
+		}
+		else if(strcmp(aliasTable.name[i], currentWord) == 0)
+		{
+			//printf("Alias: %s, Word: %s, Match: %s\n", name, word, aliasTable.name[i]);
+			free(currentWord);
+			currentWord = strdup(aliasTable.word[i]);
+			i = 0;
+			if(strcmp(name, currentWord) == 0)
+			{
+				printf("Error, expansion of \"%s\" would create a loop.\n", name);
+				free(currentWord);
+				return 1;
+			}
 		}
 		else if(strcmp(aliasTable.name[i], name) == 0) {
-			strcpy(aliasTable.word[i], word);
-			return 1;
+			index = i;
 		}
 	}
-	strcpy(aliasTable.name[aliasIndex], name);
-	strcpy(aliasTable.word[aliasIndex], word);
-	aliasIndex++;
-
+	strcpy(aliasTable.name[index], name);
+	strcpy(aliasTable.word[index], word);
+	if(index == aliasIndex) aliasIndex++;
+	free(currentWord);
 	return 1;
 }
 

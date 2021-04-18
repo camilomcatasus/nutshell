@@ -29,6 +29,7 @@ bool errToOut;
 char errFile[128];
 char cwd[PATH_MAX];
 bool sunalias;
+int wordCount;
 struct evTable varTable;
 
 struct aTable aliasTable;

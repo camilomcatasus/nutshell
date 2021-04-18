@@ -16,6 +16,7 @@ int main()
     aliasIndex = 0;
     varIndex = 0;
     commandIndex = 0;
+    wordCount = 0;
     background, redirectedErr, redirectedInput, redirectedOutput, append, errToOut = false;
     getcwd(cwd, sizeof(cwd));
 

@@ -5,7 +5,6 @@ I will link the github to provide proof, but I've done all of the work by myself
 My partner on the due date of the project informed me that he "was behind in the lectures", and just trying to pass with a D.
 So this entire project has been done by myself. That aside, I'll start listing the specifications of my program.
 ## Features not implemented
-* Tilde expansion
 * File Name completion
 * Metacharacters cannot be in words with \
 ## Features implemented
@@ -17,3 +16,4 @@ So this entire project has been done by myself. That aside, I'll start listing t
 * Wildcard matching
 * Environment variable expansion
 * Alias Expansion
+* Tilde Expansion
